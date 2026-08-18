@@ -1,4 +1,4 @@
-# cliforge
+# CLIforge
 
 A header-only C++20 engine for building CLIs whose commands are ordinary
 free functions. Parameters and options are explicitly typed where
