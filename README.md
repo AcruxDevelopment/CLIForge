@@ -250,5 +250,3 @@ tests/
   type_test.cpp                    every scalar type, valid + invalid input
   registration_errors_test.cpp     every builder-misuse guard (+ positive cases)
 ```
-#   C L I F o r g e  
- 
