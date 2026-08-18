@@ -1,4 +1,4 @@
-# CLIforge
+# CLIForge
 
 A header-only C++20 engine for building CLIs whose commands are ordinary
 free functions. Parameters and options are explicitly typed where
@@ -157,6 +157,26 @@ filled in. `packctl project new -h` matches `project <name> create`,
 three, clearly separated, rather than silently picking one. A
 fully-specified prefix (`project myapp delete --help`) narrows to the
 one actual match, exactly as before.
+
+The same treatment applies to an *incomplete* command that wasn't
+explicitly asking for help: `packctl project` alone is missing
+`<name>`, and that's equally true of all three `project` commands (they
+report the identical error). Rather than arbitrarily surfacing whichever
+one happened to be registered first, every command tied for "most
+specific incomplete match" is listed:
+
+```
+$ packctl project
+Error: missing required argument '<name>': expected a value of type string
+'project' matches 3 commands:
+  packctl project <name> create [OPTIONS]       Scaffold a new project from a template
+  packctl project <name> delete [OPTIONS]       Permanently delete a project by name
+  packctl project <name> [OPTIONS]              Show information about a project
+```
+
+A single most-specific match (e.g. `packctl project x create --template`,
+missing only `--template`'s value) still reports just the one relevant
+`Usage:` line, unchanged.
 
 ## Keeping allocations down
 

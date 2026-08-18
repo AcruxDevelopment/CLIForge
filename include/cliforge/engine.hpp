@@ -81,26 +81,47 @@ public:
         };
         std::vector<Candidate> candidates;
         std::string bestPartialError;
-        Command* bestPartialCmd = nullptr;
+        std::vector<Command*> bestPartialCmds;  // every command tied for the best partial score
         int bestPartialScore = -1;
         for (auto& cmd : commands_) {
             StructuredMatch m = cmd->tryMatchStructured(tokens);
             if (m.success) {
                 candidates.push_back({cmd.get(), std::move(m)});
-            } else if (!m.error.empty() && m.keywordScore > bestPartialScore) {
-                bestPartialScore = m.keywordScore;
-                bestPartialError = m.error;
-                bestPartialCmd = cmd.get();
+            } else if (!m.error.empty()) {
+                if (m.keywordScore > bestPartialScore) {
+                    bestPartialScore = m.keywordScore;
+                    bestPartialError = m.error;
+                    bestPartialCmds.clear();
+                    bestPartialCmds.push_back(cmd.get());
+                } else if (m.keywordScore == bestPartialScore) {
+                    // Genuinely tied -- e.g. "project" alone is an equally
+                    // incomplete prefix of create/delete/info, all of which
+                    // report the identical "missing <name>" error. Rather
+                    // than silently picking whichever was registered first
+                    // (which read as an arbitrary, misleading suggestion),
+                    // remember all of them and show every option.
+                    bestPartialCmds.push_back(cmd.get());
+                }
             }
         }
 
         if (candidates.empty()) {
-            if (bestPartialCmd) {
+            if (!bestPartialCmds.empty()) {
                 // Every keyword matched some command, just with a bad or
                 // missing argument value -- this is much more actionable
                 // than a generic "no command matches" + fuzzy suggestions.
                 std::cerr << "Error: " << bestPartialError << "\n";
-                std::cerr << "Usage: " << programName_ << " " << bestPartialCmd->usageLine() << "\n";
+                if (bestPartialCmds.size() == 1) {
+                    std::cerr << "Usage: " << programName_ << " " << bestPartialCmds.front()->usageLine()
+                               << "\n";
+                } else {
+                    std::cerr << "'" << join(tokens) << "' matches " << bestPartialCmds.size()
+                               << " commands:\n";
+                    for (auto* cmd : bestPartialCmds) {
+                        std::string line = programName_ + " " + cmd->usageLine();
+                        std::cerr << "  " << padRight(line, 46) << firstLine(cmd->description()) << "\n";
+                    }
+                }
                 return 1;
             }
             std::cerr << "Error: no command matches '" << join(tokens) << "'.\n";
