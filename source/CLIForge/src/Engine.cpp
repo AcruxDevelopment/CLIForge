@@ -3,11 +3,11 @@
 
 namespace cliforge
 {
-	Engine::Engine(std::string programName) : programName_(std::move(programName)) {}
+	Engine::Engine(std::string programName) : m_programName(std::move(programName)) {}
 
-	Engine& Engine::describe(std::string description)
+	Engine& Engine::describe(const std::string& description)
 	{
-		description_ = std::move(description);
+		m_description = std::move(description);
 		return *this;
 	}
 
@@ -16,15 +16,15 @@ namespace cliforge
 	// The Engine owns it for the rest of the program's lifetime.
 	Command& Engine::command()
 	{
-		commands_.push_back(std::make_unique<Command>());
-		return *commands_.back();
+		m_commands.push_back(std::make_unique<Command>());
+		return *m_commands.back();
 	}
 
 	int Engine::run(int argc, char** argv)
 	{
-		if (programName_.empty() && argc > 0)
-			programName_ = basename(argv[0]);
-		for (auto& cmd : commands_)
+		if (m_programName.empty() && argc > 0)
+			m_programName = basename(argv[0]);
+		for (auto& cmd : m_commands)
 		{
 			if (!cmd->sealed())
 			{
@@ -69,14 +69,14 @@ namespace cliforge
 
 		struct Candidate
 		{
-			Command* cmd;
+			Command* cmd{};
 			StructuredMatch match;
 		};
 		std::vector<Candidate> candidates;
 		std::string bestPartialError;
 		std::vector<Command*> bestPartialCmds; // every command tied for the best partial score
 		int bestPartialScore = -1;
-		for (auto& cmd : commands_)
+		for (auto& cmd : m_commands)
 		{
 			StructuredMatch m = cmd->tryMatchStructured(tokens);
 			if (m.success)
@@ -115,7 +115,7 @@ namespace cliforge
 				std::cerr << "Error: " << bestPartialError << "\n";
 				if (bestPartialCmds.size() == 1)
 				{
-					std::cerr << "Usage: " << programName_ << " "
+					std::cerr << "Usage: " << m_programName << " "
 							  << bestPartialCmds.front()->usageLine() << "\n";
 				}
 				else
@@ -124,7 +124,7 @@ namespace cliforge
 							  << " commands:\n";
 					for (auto* cmd : bestPartialCmds)
 					{
-						std::string line = programName_ + " " + cmd->usageLine();
+						std::string line = m_programName + " " + cmd->usageLine();
 						std::cerr << "  " << padRight(line, 46) << firstLine(cmd->description())
 								  << "\n";
 					}
@@ -177,7 +177,7 @@ namespace cliforge
 
 		std::cerr << "Error: " << firstError << "\n";
 		if (firstErrorCmd)
-			std::cerr << "Usage: " << programName_ << " " << firstErrorCmd->usageLine() << "\n";
+			std::cerr << "Usage: " << m_programName << " " << firstErrorCmd->usageLine() << "\n";
 		return 1;
 	}
 
@@ -211,7 +211,7 @@ namespace cliforge
 			return 0;
 		}
 		std::vector<Command*> matches;
-		for (auto& cmd : commands_)
+		for (auto& cmd : m_commands)
 		{
 			if (cmd->couldMatchPrefix(queryTokens))
 				matches.push_back(cmd.get());
@@ -224,7 +224,7 @@ namespace cliforge
 		}
 		if (matches.size() == 1)
 		{
-			std::cout << matches.front()->helpText(programName_);
+			std::cout << matches.front()->helpText(m_programName);
 			return 0;
 		}
 		std::cout << "'" << join(queryTokens) << "' matches " << matches.size() << " commands:\n\n";
@@ -232,30 +232,30 @@ namespace cliforge
 		{
 			if (i)
 				std::cout << "\n";
-			std::cout << matches[i]->helpText(programName_);
+			std::cout << matches[i]->helpText(m_programName);
 		}
 		return 0;
 	}
 
 	void Engine::printGlobalHelp(std::ostream& os) const
 	{
-		os << "Usage: " << programName_ << " <command> [ARGUMENTS] [OPTIONS]\n";
-		if (!description_.empty())
-			os << "\n" << description_ << "\n";
+		os << "Usage: " << m_programName << " <command> [ARGUMENTS] [OPTIONS]\n";
+		if (!m_description.empty())
+			os << "\n" << m_description << "\n";
 		os << "\nCommands:\n";
-		for (auto& cmd : commands_)
+		for (auto& cmd : m_commands)
 		{
-			std::string line = programName_ + " " + cmd->usageLine();
+			std::string line = m_programName + " " + cmd->usageLine();
 			os << "  " << padRight(line, 46) << firstLine(cmd->description()) << "\n";
 		}
-		os << "\nRun '" << programName_ << " help <command>' or add --help/-h to any command "
+		os << "\nRun '" << m_programName << " help <command>' or add --help/-h to any command "
 		   << "for details.\n";
 	}
 
 	void Engine::suggestCommands(const std::vector<std::string>& tokens, std::ostream& os) const
 	{
 		std::vector<std::pair<double, Command*>> scored;
-		for (auto& cmd : commands_)
+		for (auto& cmd : m_commands)
 		{
 			Command::FuzzyScore s = cmd->fuzzyStructuralDistance(tokens);
 			double ratio = s.keywordChars ? static_cast<double>(s.distance) /
@@ -277,7 +277,7 @@ namespace cliforge
 			return;
 		os << "\nDid you mean:\n";
 		for (auto* cmd : close)
-			os << "  " << programName_ << " " << cmd->usageLine() << "\n";
+			os << "  " << m_programName << " " << cmd->usageLine() << "\n";
 	}
 
 	std::string Engine::firstLine(const std::string& s)

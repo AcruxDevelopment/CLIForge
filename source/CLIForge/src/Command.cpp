@@ -33,15 +33,15 @@ namespace cliforge
 		}
 	}
 
-	Command& Command::keyword(std::string literal)
+	Command& Command::keyword(const std::string& literal)
 	{
-		if (unstructuredStarted_)
+		if (m_unstructuredStarted)
 		{
 			throw RegistrationError("can't declare keyword('" + literal +
 									"') after a flag()/option() was added -- keywords must "
 									"come entirely before the unstructured part");
 		}
-		if (structuredSealed_)
+		if (m_structuredSealed)
 		{
 			throw RegistrationError("can't declare keyword('" + literal +
 									"') after a variadic parameter -- a variadic parameter "
@@ -56,13 +56,13 @@ namespace cliforge
 		Slot s;
 		s.kind = SlotKind::Keyword;
 		s.name = std::move(literal);
-		structured_.push_back(std::move(s));
-		lastSlot_ = &structured_.back();
+		m_structured.push_back(std::move(s));
+		m_lastSlot = &m_structured.back();
 		return *this;
 	}
 
 	// shortName is 0 (the default) for "no short form".
-	Command& Command::flag(std::string longName, char shortName, std::string description)
+	Command& Command::flag(std::string longName, char shortName, const std::string& description)
 	{
 		longName = stripDashes(std::move(longName));
 		validateLongName(longName);
@@ -73,26 +73,26 @@ namespace cliforge
 		s.name = std::move(longName);
 		s.shortName = shortName;
 		s.description = std::move(description);
-		unstructured_.push_back(std::move(s));
-		lastSlot_ = &unstructured_.back();
-		unstructuredStarted_ = true;
+		m_unstructured.push_back(std::move(s));
+		m_lastSlot = &m_unstructured.back();
+		m_unstructuredStarted = true;
 		return *this;
 	}
 
-	Command& Command::describe(std::string description)
+	Command& Command::describe(const std::string& description)
 	{
-		description_ = std::move(description);
+		m_description = std::move(description);
 		return *this;
 	}
 
 	bool Command::sealed() const
 	{
-		return sealed_;
+		return m_sealed;
 	}
 
 	const std::string& Command::description() const
 	{
-		return description_;
+		return m_description;
 	}
 
 	// --- matching / parsing entry points, used by Engine -------------
@@ -103,10 +103,10 @@ namespace cliforge
 		std::size_t i = 0;
 		try
 		{
-			for (std::size_t s = 0; s < structured_.size(); ++s)
+			for (std::size_t s = 0; s < m_structured.size(); ++s)
 			{
-				const Slot& slot = structured_[s];
-				bool isLast = (s + 1 == structured_.size());
+				const Slot& slot = m_structured[s];
+				bool isLast = (s + 1 == m_structured.size());
 				if (slot.kind == SlotKind::Keyword)
 				{
 					if (i >= tokens.size() || tokens[i] != slot.name)
@@ -135,9 +135,9 @@ namespace cliforge
 							// this is almost certainly the intended command
 							// -- just missing a required argument.
 							throw CliError("missing required argument '<" + slot.name +
-												">': expected a value of type " +
-												slot.type.displayName,
-											ErrorKind::MissingArgument);
+											   ">': expected a value of type " +
+											   slot.type.displayName,
+										   ErrorKind::MissingArgument);
 						}
 
 						m.paramValues.push_back(
@@ -168,10 +168,9 @@ namespace cliforge
 	// missing/extra positional argument, or a type mismatch.
 	std::vector<Value> Command::parseUnstructured(const std::vector<std::string>& tokens) const
 	{
-		std::vector<bool> provided(unstructured_.size(), false);
-		std::vector<std::vector<Scalar>> collected(unstructured_.size());
-		std::vector<std::string_view>
-			looseTokens; // views into `tokens`, which outlives this call
+		std::vector<bool> provided(m_unstructured.size(), false);
+		std::vector<std::vector<Scalar>> collected(m_unstructured.size());
+		std::vector<std::string_view> looseTokens; // views into `tokens`, which outlives this call
 		looseTokens.reserve(tokens.size());
 
 		std::size_t i = 0;
@@ -192,8 +191,7 @@ namespace cliforge
 				auto eq = rest.find('=');
 				bool hasInline = (eq != std::string_view::npos);
 				std::string_view longName = hasInline ? rest.substr(0, eq) : rest;
-				std::string_view inlineValue =
-					hasInline ? rest.substr(eq + 1) : std::string_view{};
+				std::string_view inlineValue = hasInline ? rest.substr(eq + 1) : std::string_view{};
 				int idx = findByLong(longName);
 				if (idx < 0)
 					throwUnknown(tok);
@@ -222,16 +220,16 @@ namespace cliforge
 						if (idx < 0)
 						{
 							throw CliError(std::string("unknown flag '-") + c +
-												"' in combined group '" + std::string(tok) +
-												"'" + suggestFlagOption(std::string("-") + c),
-											ErrorKind::UnknownOption);
+											   "' in combined group '" + std::string(tok) + "'" +
+											   suggestFlagOption(std::string("-") + c),
+										   ErrorKind::UnknownOption);
 						}
-						if (unstructured_[static_cast<size_t>(idx)].kind != SlotKind::Flag)
+						if (m_unstructured[static_cast<size_t>(idx)].kind != SlotKind::Flag)
 						{
 							throw CliError(std::string("'-") + c + "' in combined group '" +
-											std::string(tok) +
-											"' is an option (needs a value), so it can't "
-											"be combined with other short flags");
+										   std::string(tok) +
+										   "' is an option (needs a value), so it can't "
+										   "be combined with other short flags");
 						}
 						provided[static_cast<size_t>(idx)] = true;
 					}
@@ -244,16 +242,16 @@ namespace cliforge
 		// Parameter slots, positionally, in declaration order -- this is
 		// independent of where those tokens fell relative to flags/options.
 		std::vector<std::size_t> looseParamIdx;
-		for (std::size_t idx = 0; idx < unstructured_.size(); ++idx)
+		for (std::size_t idx = 0; idx < m_unstructured.size(); ++idx)
 		{
-			if (unstructured_[idx].kind == SlotKind::Parameter)
+			if (m_unstructured[idx].kind == SlotKind::Parameter)
 				looseParamIdx.push_back(idx);
 		}
 		std::vector<Value> looseValues(looseParamIdx.size());
 		std::size_t li = 0;
 		for (std::size_t k = 0; k < looseParamIdx.size(); ++k)
 		{
-			const Slot& slot = unstructured_[looseParamIdx[k]];
+			const Slot& slot = m_unstructured[looseParamIdx[k]];
 			bool isLastLoose = (k + 1 == looseParamIdx.size());
 			if (slot.variadic && isLastLoose)
 			{
@@ -271,8 +269,8 @@ namespace cliforge
 				if (li >= looseTokens.size())
 				{
 					throw CliError("missing required argument '<" + slot.name +
-										">': expected a value of type " + slot.type.displayName,
-									ErrorKind::MissingArgument);
+									   ">': expected a value of type " + slot.type.displayName,
+								   ErrorKind::MissingArgument);
 				}
 				looseValues[k] = Value::ofScalar(slot.type.parse(looseTokens[li], slot.name));
 				++li;
@@ -288,14 +286,14 @@ namespace cliforge
 			throw CliError(msg, ErrorKind::TooManyArguments);
 		}
 
-		// Assemble the final values in unstructured_'s declaration order --
+		// Assemble the final values in m_unstructured's declaration order --
 		// this is what gets paired with the bound function's arguments.
 		std::vector<Value> out;
-		out.reserve(unstructured_.size());
+		out.reserve(m_unstructured.size());
 		std::size_t looseCursor = 0;
-		for (std::size_t idx = 0; idx < unstructured_.size(); ++idx)
+		for (std::size_t idx = 0; idx < m_unstructured.size(); ++idx)
 		{
-			const Slot& slot = unstructured_[idx];
+			const Slot& slot = m_unstructured[idx];
 			if (slot.kind == SlotKind::Parameter)
 			{
 				out.push_back(std::move(looseValues[looseCursor++]));
@@ -322,23 +320,23 @@ namespace cliforge
 
 	void Command::invoke(std::vector<Value> allValues) const
 	{
-		invoke_(allValues);
+		m_invoke(allValues);
 	}
 
 	std::size_t Command::structuredSlotCount() const
 	{
-		return structured_.size();
+		return m_structured.size();
 	}
 
 	bool Command::couldMatchPrefix(const std::vector<std::string>& tokens) const
 	{
 		std::size_t i = 0;
-		for (std::size_t s = 0; s < structured_.size(); ++s)
+		for (std::size_t s = 0; s < m_structured.size(); ++s)
 		{
 			if (i >= tokens.size())
 				break; // ran out of input -- a valid, incomplete prefix
-			const Slot& slot = structured_[s];
-			bool isLast = (s + 1 == structured_.size());
+			const Slot& slot = m_structured[s];
+			bool isLast = (s + 1 == m_structured.size());
 			if (slot.kind == SlotKind::Keyword)
 			{
 				if (tokens[i] != slot.name)
@@ -360,7 +358,7 @@ namespace cliforge
 		// Whatever tokens remain must be plausible flags/options (assumed
 		// fine without deep validation) or fit a declared loose parameter.
 		std::vector<const Slot*> looseParams;
-		for (const Slot& s : unstructured_)
+		for (const Slot& s : m_unstructured)
 		{
 			if (s.kind == SlotKind::Parameter)
 				looseParams.push_back(&s);
@@ -383,9 +381,9 @@ namespace cliforge
 	std::string Command::usageLine() const
 	{
 		std::ostringstream os;
-		for (std::size_t s = 0; s < structured_.size(); ++s)
+		for (std::size_t s = 0; s < m_structured.size(); ++s)
 		{
-			const Slot& slot = structured_[s];
+			const Slot& slot = m_structured[s];
 			if (s)
 				os << ' ';
 			if (slot.kind == SlotKind::Keyword)
@@ -398,11 +396,11 @@ namespace cliforge
 			}
 		}
 		bool anyFlagOrOption =
-			std::any_of(unstructured_.begin(), unstructured_.end(),
+			std::any_of(m_unstructured.begin(), m_unstructured.end(),
 						[](const Slot& s) { return s.kind != SlotKind::Parameter; });
 		if (anyFlagOrOption)
 			os << " [OPTIONS]";
-		for (const Slot& slot : unstructured_)
+		for (const Slot& slot : m_unstructured)
 		{
 			if (slot.kind != SlotKind::Parameter)
 				continue;
@@ -415,49 +413,45 @@ namespace cliforge
 	{
 		std::ostringstream os;
 		os << "Usage: " << progName << " " << usageLine() << "\n";
-		if (!description_.empty())
-			os << "\n" << description_ << "\n";
+		if (!m_description.empty())
+			os << "\n" << m_description << "\n";
 
-		bool anyParams =
-			std::any_of(structured_.begin(), structured_.end(),
-						[](const Slot& s) { return s.kind == SlotKind::Parameter; }) ||
-			std::any_of(unstructured_.begin(), unstructured_.end(),
-						[](const Slot& s) { return s.kind == SlotKind::Parameter; });
+		bool anyParams = std::any_of(m_structured.begin(), m_structured.end(),
+									 [](const Slot& s) { return s.kind == SlotKind::Parameter; }) ||
+						 std::any_of(m_unstructured.begin(), m_unstructured.end(),
+									 [](const Slot& s) { return s.kind == SlotKind::Parameter; });
 		if (anyParams)
 		{
 			os << "\nArguments:\n";
-			for (const Slot& slot : structured_)
+			for (const Slot& slot : m_structured)
 			{
 				if (slot.kind != SlotKind::Parameter)
 					continue;
 				std::string label = "<" + slot.name + (slot.variadic ? "..." : "") + ">";
-				os << "  " << padRight(label, 22) << describeType(slot) << slot.description
-					<< "\n";
+				os << "  " << padRight(label, 22) << describeType(slot) << slot.description << "\n";
 			}
-			for (const Slot& slot : unstructured_)
+			for (const Slot& slot : m_unstructured)
 			{
 				if (slot.kind != SlotKind::Parameter)
 					continue;
 				std::string label = "<" + slot.name + (slot.variadic ? "..." : "") + ">";
-				os << "  " << padRight(label, 22) << describeType(slot) << slot.description
-					<< "\n";
+				os << "  " << padRight(label, 22) << describeType(slot) << slot.description << "\n";
 			}
 		}
 
 		bool anyFlagOrOption =
-			std::any_of(unstructured_.begin(), unstructured_.end(),
+			std::any_of(m_unstructured.begin(), m_unstructured.end(),
 						[](const Slot& s) { return s.kind != SlotKind::Parameter; });
 		os << "\nOptions:\n";
 		if (anyFlagOrOption)
 		{
-			for (const Slot& slot : unstructured_)
+			for (const Slot& slot : m_unstructured)
 			{
 				if (slot.kind == SlotKind::Parameter)
 					continue;
-				std::string names =
-					slot.shortName == '\0'
-						? ("    --" + slot.name)
-						: (std::string("-") + slot.shortName + ", --" + slot.name);
+				std::string names = slot.shortName == '\0'
+										? ("    --" + slot.name)
+										: (std::string("-") + slot.shortName + ", --" + slot.name);
 				if (slot.kind == SlotKind::Option)
 				{
 					names += " <" + slot.type.displayName + (slot.variadic ? "...>" : ">");
@@ -472,7 +466,7 @@ namespace cliforge
 	std::vector<std::string> Command::flagOptionNames() const
 	{
 		std::vector<std::string> out;
-		for (const Slot& s : unstructured_)
+		for (const Slot& s : m_unstructured)
 		{
 			if (s.kind == SlotKind::Parameter)
 				continue;
@@ -483,14 +477,15 @@ namespace cliforge
 		return out;
 	}
 
-	Command::FuzzyScore Command::fuzzyStructuralDistance(const std::vector<std::string>& tokens) const
+	Command::FuzzyScore Command::fuzzyStructuralDistance(
+		const std::vector<std::string>& tokens) const
 	{
 		std::size_t i = 0;
 		FuzzyScore score;
-		for (std::size_t s = 0; s < structured_.size(); ++s)
+		for (std::size_t s = 0; s < m_structured.size(); ++s)
 		{
-			const Slot& slot = structured_[s];
-			bool isLast = (s + 1 == structured_.size());
+			const Slot& slot = m_structured[s];
+			bool isLast = (s + 1 == m_structured.size());
 			if (slot.kind == SlotKind::Keyword)
 			{
 				score.keywordChars += slot.name.size();
@@ -555,7 +550,7 @@ namespace cliforge
 
 	void Command::checkNameFree(const std::string& longName, char shortName) const
 	{
-		for (const Slot& s : unstructured_)
+		for (const Slot& s : m_unstructured)
 		{
 			if (s.kind == SlotKind::Parameter)
 				continue; // different namespace (bare, not "--name")
@@ -565,8 +560,7 @@ namespace cliforge
 			}
 			if (shortName != '\0' && s.shortName == shortName)
 			{
-				throw RegistrationError(std::string("duplicate short name '-") + shortName +
-										"'");
+				throw RegistrationError(std::string("duplicate short name '-") + shortName + "'");
 			}
 		}
 	}
@@ -584,21 +578,21 @@ namespace cliforge
 	std::vector<Slot*> Command::orderedBindableSlots()
 	{
 		std::vector<Slot*> out;
-		for (Slot& s : structured_)
+		for (Slot& s : m_structured)
 		{
 			if (s.kind == SlotKind::Parameter)
 				out.push_back(&s);
 		}
-		for (Slot& s : unstructured_)
+		for (Slot& s : m_unstructured)
 			out.push_back(&s);
 		return out;
 	}
 
 	int Command::findByLong(std::string_view name) const
 	{
-		for (std::size_t i = 0; i < unstructured_.size(); ++i)
+		for (std::size_t i = 0; i < m_unstructured.size(); ++i)
 		{
-			if (unstructured_[i].kind != SlotKind::Parameter && unstructured_[i].name == name)
+			if (m_unstructured[i].kind != SlotKind::Parameter && m_unstructured[i].name == name)
 			{
 				return static_cast<int>(i);
 			}
@@ -610,9 +604,9 @@ namespace cliforge
 	{
 		if (c == '\0')
 			return -1;
-		for (std::size_t i = 0; i < unstructured_.size(); ++i)
+		for (std::size_t i = 0; i < m_unstructured.size(); ++i)
 		{
-			if (unstructured_[i].kind != SlotKind::Parameter && unstructured_[i].shortName == c)
+			if (m_unstructured[i].kind != SlotKind::Parameter && m_unstructured[i].shortName == c)
 			{
 				return static_cast<int>(i);
 			}
@@ -634,8 +628,8 @@ namespace cliforge
 	[[noreturn]] void Command::throwUnknown(std::string_view tok) const
 	{
 		throw CliError("unknown flag/option '" + std::string(tok) + "' for this command" +
-							suggestFlagOption(std::string(tok)),
-						ErrorKind::UnknownOption);
+						   suggestFlagOption(std::string(tok)),
+					   ErrorKind::UnknownOption);
 	}
 
 	std::string Command::describeType(const Slot& slot)
@@ -651,14 +645,13 @@ namespace cliforge
 	}
 
 	void Command::consumeSlot(const Command& self, int idxIn, bool hasInline,
-							std::string_view inlineValue,
-							const std::vector<std::string>& tokens, std::size_t& i,
-							std::vector<bool>& provided,
-							std::vector<std::vector<Scalar>>& collected,
-							std::string_view tokForError)
+							  std::string_view inlineValue, const std::vector<std::string>& tokens,
+							  std::size_t& i, std::vector<bool>& provided,
+							  std::vector<std::vector<Scalar>>& collected,
+							  std::string_view tokForError)
 	{
 		std::size_t idx = static_cast<std::size_t>(idxIn);
-		const Slot& slot = self.unstructured_[idx];
+		const Slot& slot = self.m_unstructured[idx];
 		if (slot.kind == SlotKind::Flag)
 		{
 			if (hasInline)
@@ -692,8 +685,8 @@ namespace cliforge
 			if (i == before)
 			{
 				throw CliError("option '" + std::string(tokForError) +
-									"' requires at least one value",
-								ErrorKind::MissingValue);
+								   "' requires at least one value",
+							   ErrorKind::MissingValue);
 			}
 			provided[idx] = true;
 		}
@@ -702,7 +695,7 @@ namespace cliforge
 			if (i >= tokens.size() || detail::looksLikeOptionStart(tokens[i]))
 			{
 				throw CliError("option '" + std::string(tokForError) + "' requires a value",
-								ErrorKind::MissingValue);
+							   ErrorKind::MissingValue);
 			}
 			collected[idx] = {slot.type.parse(tokens[i], slot.name)};
 			provided[idx] = true;

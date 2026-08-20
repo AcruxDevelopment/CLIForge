@@ -20,8 +20,9 @@
 // const reference all work). Mismatches are RegistrationErrors caught at
 // startup, not silent surprises at run time.
 
-#include <algorithm>
 #include <cctype>
+
+#include <algorithm>
 #include <functional>
 #include <optional>
 #include <sstream>
@@ -43,37 +44,35 @@ namespace cliforge
 	{
 		// --- small type-trait helpers used only for action() binding ----------
 
-		template <typename T>
-		struct is_optional : std::false_type {};
-
-		template <typename T>
-		struct is_optional<std::optional<T>> : std::true_type {
-			using inner = T;
+		template <typename T> struct IsOptional : std::false_type
+		{
 		};
 
-		template <typename T>
-		inline constexpr bool is_optional_v = is_optional<T>::value;
-
-		template <typename T>
-		struct is_vector : std::false_type {};
-
-		template <typename T>
-		struct is_vector<std::vector<T>> : std::true_type {
-			using inner = T;
+		template <typename T> struct IsOptional<std::optional<T>> : std::true_type
+		{
+			using Inner = T;
 		};
 
-		template <typename T>
-		inline constexpr bool is_vector_v = is_vector<T>::value;
+		template <typename T> inline constexpr bool IsOptionalV = IsOptional<T>::value;
+
+		template <typename T> struct IsVector : std::false_type
+		{
+		};
+
+		template <typename T> struct IsVector<std::vector<T>> : std::true_type
+		{
+			using Inner = T;
+		};
+
+		template <typename T> inline constexpr bool IsVectorV = IsVector<T>::value;
 
 		template <typename T>
-		inline constexpr bool is_builtin_scalar_v =
-			std::is_same_v<T, int8_t> || std::is_same_v<T, uint8_t> ||
-			std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t> ||
-			std::is_same_v<T, int32_t> || std::is_same_v<T, uint32_t> ||
-			std::is_same_v<T, int64_t> || std::is_same_v<T, uint64_t> ||
-			std::is_same_v<T, float> || std::is_same_v<T, double> ||
-			std::is_same_v<T, std::string> || std::is_same_v<T, char> ||
-			std::is_same_v<T, bool>;
+		inline constexpr bool IsBuiltinScalarV =
+			std::is_same_v<T, int8_t> || std::is_same_v<T, uint8_t> || std::is_same_v<T, int16_t> ||
+			std::is_same_v<T, uint16_t> || std::is_same_v<T, int32_t> ||
+			std::is_same_v<T, uint32_t> || std::is_same_v<T, int64_t> ||
+			std::is_same_v<T, uint64_t> || std::is_same_v<T, float> || std::is_same_v<T, double> ||
+			std::is_same_v<T, std::string> || std::is_same_v<T, char> || std::is_same_v<T, bool>;
 
 		// A token is where the unstructured (flags/options) part begins if it
 		// starts with a dash and isn't shaped like a negative number -- that way
@@ -87,10 +86,9 @@ namespace cliforge
 		// RegistrationError messages. Only built-in scalars and enums are ever
 		// legal here (anything else is already rejected by parameter<T>()'s own
 		// static_assert), so this never needs to handle the general case.
-		template <typename T>
-		std::string friendlyTypeName()
+		template <typename T> std::string friendlyTypeName()
 		{
-			if constexpr (is_builtin_scalar_v<T>)
+			if constexpr (IsBuiltinScalarV<T>)
 			{
 				return TypeOf<T>::get().displayName;
 			}
@@ -110,8 +108,8 @@ namespace cliforge
 	struct StructuredMatch
 	{
 		bool success = false;
-		std::size_t consumed = 0;      // tokens belonging to the structured part
-		int keywordScore = 0;          // number of literal keywords matched
+		std::size_t consumed = 0; // tokens belonging to the structured part
+		int keywordScore = 0;	  // number of literal keywords matched
 		std::vector<Value> paramValues;
 		// Set when every literal keyword matched but a parameter's value
 		// either failed to parse or was never given -- lets the Engine
@@ -126,7 +124,7 @@ namespace cliforge
 		// Keywords carry no description of their own -- .describe() on the
 		// command is what shows up in help; a keyword is purely a literal
 		// token to match.
-		Command& keyword(std::string literal);
+		Command& keyword(const std::string& literal);
 
 		// T is explicit and required: every parameter is typed at the point
 		// it's declared, not inferred later from action(). Called before any
@@ -150,55 +148,55 @@ namespace cliforge
 			s.cppType = std::type_index(typeid(T));
 			if constexpr (std::is_enum_v<T>)
 			{
-				s.awaitingChoices = true;  // choices<T>(...) must follow immediately
+				s.awaitingChoices = true; // choices<T>(...) must follow immediately
 			}
 			else
 			{
-				static_assert(detail::is_builtin_scalar_v<T>,
+				static_assert(detail::IsBuiltinScalarV<T>,
 							  "cliforge: unsupported parameter type -- use a fixed-width int, "
 							  "float/double, std::string, char, bool, or an enum (with "
 							  "choices<T>() called immediately after)");
 				s.type = TypeOf<T>::get();
 			}
-			if (!unstructuredStarted_)
+			if (!m_unstructuredStarted)
 			{
-				if (structuredSealed_)
+				if (m_structuredSealed)
 				{
-					throw RegistrationError(
-						"can't declare parameter('" + s.name +
-						"') after a variadic parameter -- a variadic parameter "
-						"must be the last thing in the structured part");
+					throw RegistrationError("can't declare parameter('" + s.name +
+											"') after a variadic parameter -- a variadic parameter "
+											"must be the last thing in the structured part");
 				}
-				structured_.push_back(std::move(s));
-				lastSlot_ = &structured_.back();
+				m_structured.push_back(std::move(s));
+				m_lastSlot = &m_structured.back();
 				if (variadic)
-					structuredSealed_ = true;
+					m_structuredSealed = true;
 			}
 			else
 			{
-				if (looseSealed_)
+				if (m_looseSealed)
 				{
-					throw RegistrationError(
-						"can't declare parameter('" + s.name +
-						"') after a variadic parameter -- a variadic parameter "
-						"must be the last parameter declared");
+					throw RegistrationError("can't declare parameter('" + s.name +
+											"') after a variadic parameter -- a variadic parameter "
+											"must be the last parameter declared");
 				}
 
-				unstructured_.push_back(std::move(s));
-				lastSlot_ = &unstructured_.back();
-				if (variadic) looseSealed_ = true;
+				m_unstructured.push_back(std::move(s));
+				m_lastSlot = &m_unstructured.back();
+				if (variadic)
+					m_looseSealed = true;
 			}
 			return *this;
 		}
 
 		// shortName is 0 (the default) for "no short form".
-		Command& flag(std::string longName, char shortName, std::string description);
+		Command& flag(std::string longName, char shortName, const std::string& description);
 
 		// T is explicit and required, same as parameter<T>(). Options are
 		// always optional in the calling convention (see action()) -- there
 		// is no way to declare a "required" option, by design.
 		template <typename T>
-		Command& option(std::string longName, char shortName, std::string description, bool variadic = false)
+		Command& option(std::string longName, char shortName, std::string description,
+						bool variadic = false)
 		{
 			longName = stripDashes(std::move(longName));
 			validateLongName(longName);
@@ -217,20 +215,19 @@ namespace cliforge
 			}
 			else
 			{
-				static_assert(detail::is_builtin_scalar_v<T>,
-					"cliforge: unsupported option type -- use a fixed-width int, "
-					"float/double, std::string, char, bool, or an enum (with "
-					"choices<T>() called immediately after)"
-				);
+				static_assert(detail::IsBuiltinScalarV<T>,
+							  "cliforge: unsupported option type -- use a fixed-width int, "
+							  "float/double, std::string, char, bool, or an enum (with "
+							  "choices<T>() called immediately after)");
 				s.type = TypeOf<T>::get();
 			}
-			unstructured_.push_back(std::move(s));
-			lastSlot_ = &unstructured_.back();
-			unstructuredStarted_ = true;
+			m_unstructured.push_back(std::move(s));
+			m_lastSlot = &m_unstructured.back();
+			m_unstructuredStarted = true;
 			return *this;
 		}
 
-		Command& describe(std::string description);
+		Command& describe(const std::string& description);
 
 		// Restricts the most-recently-declared parameter/option to a fixed
 		// set of named values -- this is how custom enums plug in (T is
@@ -238,25 +235,26 @@ namespace cliforge
 		// and it doubles as a generic "choice" restriction for any type. T
 		// must match the type declared at parameter<T>()/option<T>().
 		template <typename T>
-		Command& choices(std::initializer_list<std::pair<std::string, T>> values, std::string typeName = "") {
-			if (lastSlot_ == nullptr || (lastSlot_->kind != SlotKind::Parameter && lastSlot_->kind != SlotKind::Option))
+		Command& choices(std::initializer_list<std::pair<std::string, T>> values,
+						 std::string typeName = "")
+		{
+			if (m_lastSlot == nullptr ||
+				(m_lastSlot->kind != SlotKind::Parameter && m_lastSlot->kind != SlotKind::Option))
 			{
-				throw RegistrationError(
-					"choices<>() must directly follow the parameter<T>() or "
-					"option<T>() it restricts"
-				);
+				throw RegistrationError("choices<>() must directly follow the parameter<T>() or "
+										"option<T>() it restricts");
 			}
 
-			if (!lastSlot_->cppType || *lastSlot_->cppType != std::type_index(typeid(T)))
+			if (!m_lastSlot->cppType || *m_lastSlot->cppType != std::type_index(typeid(T)))
 			{
 				throw RegistrationError("choices<>() type doesn't match the type declared for '" +
-					lastSlot_->name + "'"
-				);
+										m_lastSlot->name + "'");
 			}
 
 			std::vector<std::pair<std::string, T>> table(values);
-			lastSlot_->type = makeChoiceTypeInfo<T>(typeName.empty() ? std::string("enum") : std::move(typeName), table);
-			lastSlot_->awaitingChoices = false;
+			m_lastSlot->type = makeChoiceTypeInfo<T>(
+				typeName.empty() ? std::string("enum") : std::move(typeName), table);
+			m_lastSlot->awaitingChoices = false;
 			return *this;
 		}
 
@@ -267,56 +265,55 @@ namespace cliforge
 		// matched, in order, to [parameters in declaration order] then
 		// [flags/options/loose-parameters in declaration order]. Arguments
 		// may be taken by value, by reference, or by const reference.
-		template <typename Func>
-		Command& action(Func f)
+		template <typename Func> Command& action(Func f)
 		{
-			using Traits = detail::function_traits<std::decay_t<Func>>;
-			if (structured_.empty() || std::none_of(structured_.begin(), structured_.end(), [](const Slot& s)
+			using Traits = detail::FunctionTraits<std::decay_t<Func>>;
+			if (m_structured.empty() ||
+				std::none_of(m_structured.begin(), m_structured.end(),
+							 [](const Slot& s) { return s.kind == SlotKind::Keyword; }))
 			{
-				return s.kind == SlotKind::Keyword;
-			}))
-			{
-				throw RegistrationError(
-					"a command must declare at least one keyword() so it can "
-					"be identified on the command line");
+				throw RegistrationError("a command must declare at least one keyword() so it can "
+										"be identified on the command line");
 			}
 
-			for (const Slot& s : structured_) checkNotAwaitingChoices(s);
-			for (const Slot& s : unstructured_) checkNotAwaitingChoices(s);
+			for (const Slot& s : m_structured)
+				checkNotAwaitingChoices(s);
+			for (const Slot& s : m_unstructured)
+				checkNotAwaitingChoices(s);
 
 			std::vector<Slot*> ordered = orderedBindableSlots();
-			if (ordered.size() != Traits::arity)
+			if (ordered.size() != Traits::Arity)
 			{
 				throw RegistrationError(
-					"action() function takes " + std::to_string(Traits::arity) +
-					" argument(s) but this command declared " +
-					std::to_string(ordered.size()) +
+					"action() function takes " + std::to_string(Traits::Arity) +
+					" argument(s) but this command declared " + std::to_string(ordered.size()) +
 					" parameter/flag/option slot(s) -- these must match 1:1, "
 					"in declaration order (parameters first, then flags/options)");
 			}
 
-			bindArgs(std::function{f}, ordered, std::make_index_sequence<Traits::arity>{});
-			sealed_ = true;
+			bindArgs(std::function{f}, ordered, std::make_index_sequence<Traits::Arity>{});
+			m_sealed = true;
 			return *this;
 		}
 
-		bool sealed() const;
-		const std::string& description() const;
+		[[nodiscard]] bool sealed() const;
+		[[nodiscard]] const std::string& description() const;
 
 		// --- matching / parsing entry points, used by Engine -------------
 
-		StructuredMatch tryMatchStructured(const std::vector<std::string>& tokens) const;
-		
+		[[nodiscard]] StructuredMatch tryMatchStructured(
+			const std::vector<std::string>& tokens) const;
 
 		// Parses the (order-agnostic) flags/options/loose-parameters tail.
 		// Throws CliError (with a specific ErrorKind) describing exactly what
 		// went wrong: an unrecognized flag/option, a missing option value, a
 		// missing/extra positional argument, or a type mismatch.
-		std::vector<Value> parseUnstructured(const std::vector<std::string>& tokens) const;
+		[[nodiscard]] std::vector<Value> parseUnstructured(
+			const std::vector<std::string>& tokens) const;
 
 		void invoke(std::vector<Value> allValues) const;
 
-		std::size_t structuredSlotCount() const;
+		[[nodiscard]] std::size_t structuredSlotCount() const;
 
 		// Lenient prefix check used only for --help / `help <words>` : does
 		// `tokens` look like the start of (or a complete instance of) this
@@ -326,34 +323,36 @@ namespace cliforge
 		// what makes it a "prefix"). Used to find *every* command consistent
 		// with what's been typed so far, so an ambiguous prefix can show help
 		// for all of them instead of guessing one.
-		bool couldMatchPrefix(const std::vector<std::string>& tokens) const;
+		[[nodiscard]] bool couldMatchPrefix(const std::vector<std::string>& tokens) const;
 
 		// --- help / usage --------------------------------------------------
 
-		std::string usageLine() const;
+		[[nodiscard]] std::string usageLine() const;
 
-		std::string helpText(const std::string& progName) const;
+		[[nodiscard]] std::string helpText(const std::string& progName) const;
 
-		std::vector<std::string> flagOptionNames() const;
+		[[nodiscard]] std::vector<std::string> flagOptionNames() const;
 
 		// Fuzzy structural distance used for "did you mean...?" suggestions.
-		struct FuzzyScore {
+		struct FuzzyScore
+		{
 			std::size_t distance = 0;
-			std::size_t keywordChars = 0;  // denominator for a relative threshold
+			std::size_t keywordChars = 0; // denominator for a relative threshold
 		};
 
-		FuzzyScore fuzzyStructuralDistance(const std::vector<std::string>& tokens) const;
+		[[nodiscard]] FuzzyScore fuzzyStructuralDistance(
+			const std::vector<std::string>& tokens) const;
 
 	private:
-		std::vector<Slot> structured_;
-		std::vector<Slot> unstructured_;
-		std::string description_;
-		std::function<void(std::vector<Value>&)> invoke_;
-		Slot* lastSlot_ = nullptr;
-		bool unstructuredStarted_ = false;
-		bool structuredSealed_ = false;
-		bool looseSealed_ = false;
-		bool sealed_ = false;
+		std::vector<Slot> m_structured;
+		std::vector<Slot> m_unstructured;
+		std::string m_description;
+		std::function<void(std::vector<Value>&)> m_invoke;
+		Slot* m_lastSlot = nullptr;
+		bool m_unstructuredStarted = false;
+		bool m_structuredSealed = false;
+		bool m_looseSealed = false;
+		bool m_sealed = false;
 
 		static std::string stripDashes(std::string s);
 
@@ -368,69 +367,94 @@ namespace cliforge
 		std::vector<Slot*> orderedBindableSlots();
 
 		// Validates (never invents) that a slot's declared type matches T.
-		template <typename T>
-		static void checkTypeMatches(const Slot& slot) {
-			if (!slot.cppType || *slot.cppType != std::type_index(typeid(T))) {
-				throw RegistrationError("'" + slot.name + "' was declared as " + slot.type.displayName +
-										 " but action() expects " + detail::friendlyTypeName<T>());
+		template <typename T> static void checkTypeMatches(const Slot& slot)
+		{
+			if (!slot.cppType || *slot.cppType != std::type_index(typeid(T)))
+			{
+				throw RegistrationError("'" + slot.name + "' was declared as " +
+										slot.type.displayName + " but action() expects " +
+										detail::friendlyTypeName<T>());
 			}
 		}
 
 		// ArgT is the *raw* action() parameter type, e.g. `const std::string&`
 		// or `std::vector<int32_t>` -- validated after stripping cv/ref.
-		template <typename ArgT>
-		static void configureSlot(Slot& slot) {
+		template <typename ArgT> static void configureSlot(Slot& slot)
+		{
 			using Stripped = std::remove_cvref_t<ArgT>;
-			if (slot.kind == SlotKind::Flag) {
-				if constexpr (!std::is_same_v<Stripped, bool>) {
-					throw RegistrationError("flag '--" + slot.name + "' must bind to bool in action()");
+			if (slot.kind == SlotKind::Flag)
+			{
+				if constexpr (!std::is_same_v<Stripped, bool>)
+				{
+					throw RegistrationError("flag '--" + slot.name +
+											"' must bind to bool in action()");
 				}
 				return;
 			}
-			if constexpr (detail::is_optional_v<Stripped>) {
-				using Inner = typename detail::is_optional<Stripped>::inner;
-				if (slot.kind == SlotKind::Parameter) {
+			if constexpr (detail::IsOptionalV<Stripped>)
+			{
+				using Inner = typename detail::IsOptional<Stripped>::Inner;
+				if (slot.kind == SlotKind::Parameter)
+				{
 					throw RegistrationError("parameter '<" + slot.name +
-											 ">' can't bind to std::optional<> -- positional "
-											 "parameters are always required");
+											">' can't bind to std::optional<> -- positional "
+											"parameters are always required");
 				}
-				if (slot.variadic) {
-					throw RegistrationError("option '--" + slot.name +
-											 "' is variadic; bind it to std::vector<>, not std::optional<>");
-				}
-				checkTypeMatches<Inner>(slot);
-			} else if constexpr (detail::is_vector_v<Stripped>) {
-				using Inner = typename detail::is_vector<Stripped>::inner;
-				if (!slot.variadic) {
-					throw RegistrationError("'" + slot.name +
-											 "' binds to std::vector<> but wasn't declared variadic=true");
+				if (slot.variadic)
+				{
+					throw RegistrationError(
+						"option '--" + slot.name +
+						"' is variadic; bind it to std::vector<>, not std::optional<>");
 				}
 				checkTypeMatches<Inner>(slot);
-			} else {
-				if (slot.variadic) {
-					throw RegistrationError("'" + slot.name +
-											 "' was declared variadic=true; bind it to std::vector<>");
+			}
+			else if constexpr (detail::IsVectorV<Stripped>)
+			{
+				using Inner = typename detail::IsVector<Stripped>::Inner;
+				if (!slot.variadic)
+				{
+					throw RegistrationError(
+						"'" + slot.name +
+						"' binds to std::vector<> but wasn't declared variadic=true");
 				}
-				if (slot.kind == SlotKind::Option) {
-					throw RegistrationError("option '--" + slot.name +
-											 "' must bind to std::optional<T> (or std::vector<T> if "
-											 "variadic) -- options are always optional, never required");
+				checkTypeMatches<Inner>(slot);
+			}
+			else
+			{
+				if (slot.variadic)
+				{
+					throw RegistrationError(
+						"'" + slot.name + "' was declared variadic=true; bind it to std::vector<>");
+				}
+				if (slot.kind == SlotKind::Option)
+				{
+					throw RegistrationError(
+						"option '--" + slot.name +
+						"' must bind to std::optional<T> (or std::vector<T> if "
+						"variadic) -- options are always optional, never required");
 				}
 				checkTypeMatches<Stripped>(slot);
 			}
 		}
 
-		template <typename ArgT>
-		static ArgT extractArg(const Value& v) {
-			if constexpr (std::is_same_v<ArgT, bool>) {
+		template <typename ArgT> static ArgT extractArg(const Value& v)
+		{
+			if constexpr (std::is_same_v<ArgT, bool>)
+			{
 				return v.as<bool>();
-			} else if constexpr (detail::is_optional_v<ArgT>) {
-				using Inner = typename detail::is_optional<ArgT>::inner;
+			}
+			else if constexpr (detail::IsOptionalV<ArgT>)
+			{
+				using Inner = typename detail::IsOptional<ArgT>::Inner;
 				return v.hasValue() ? std::optional<Inner>(v.as<Inner>()) : std::nullopt;
-			} else if constexpr (detail::is_vector_v<ArgT>) {
-				using Inner = typename detail::is_vector<ArgT>::inner;
+			}
+			else if constexpr (detail::IsVectorV<ArgT>)
+			{
+				using Inner = typename detail::IsVector<ArgT>::Inner;
 				return v.asVector<Inner>();
-			} else {
+			}
+			else
+			{
 				return v.as<ArgT>();
 			}
 		}
@@ -442,20 +466,22 @@ namespace cliforge
 		// still bind correctly.
 		template <typename Ret, typename... Args, std::size_t... I>
 		void bindArgs(std::function<Ret(Args...)> f, std::vector<Slot*>& ordered,
-					  std::index_sequence<I...>) {
+					  std::index_sequence<I...>)
+		{
 			(configureSlot<Args>(*ordered[I]), ...);
-			invoke_ = [f = std::move(f)](std::vector<Value>& values) {
+			m_invoke = [f = std::move(f)](std::vector<Value>& values)
+			{
 				std::tuple<std::remove_cvref_t<Args>...> extracted{
 					extractArg<std::remove_cvref_t<Args>>(values[I])...};
 				std::apply(f, extracted);
 			};
 		}
 
-		int findByLong(std::string_view name) const;
+		[[nodiscard]] int findByLong(std::string_view name) const;
 
-		int findByShort(char c) const;
+		[[nodiscard]] int findByShort(char c) const;
 
-		std::string suggestFlagOption(const std::string& given) const;
+		[[nodiscard]] std::string suggestFlagOption(const std::string& given) const;
 
 		[[noreturn]] void throwUnknown(std::string_view tok) const;
 

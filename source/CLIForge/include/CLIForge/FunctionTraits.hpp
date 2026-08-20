@@ -8,54 +8,54 @@
 // having to spell the types out twice.
 
 #include <cstddef>
+
 #include <functional>
 #include <tuple>
 
 namespace cliforge::detail
 {
 
-	template <typename T> struct function_traits;
+	template <typename T> struct FunctionTraits;
 
 	// Plain free function: void foo(std::string, int)
-	template <typename Ret, typename... Args> struct function_traits<Ret (*)(Args...)>
+	template <typename Ret, typename... Args> struct FunctionTraits<Ret (*)(Args...)>
 	{
-		using return_type = Ret;
-		static constexpr std::size_t arity = sizeof...(Args);
-		template <std::size_t I> using arg = std::tuple_element_t<I, std::tuple<Args...>>;
-		using args_tuple = std::tuple<Args...>;
+		using ReturnType = Ret;
+		static constexpr std::size_t Arity = sizeof...(Args);
+		template <std::size_t I> using Arg = std::tuple_element_t<I, std::tuple<Args...>>;
+		using ArgsTuple = std::tuple<Args...>;
 	};
 
 	// std::function<void(std::string, int)>
-	template <typename Ret, typename... Args> struct function_traits<std::function<Ret(Args...)>>
+	template <typename Ret, typename... Args> struct FunctionTraits<std::function<Ret(Args...)>>
 	{
-		using return_type = Ret;
-		static constexpr std::size_t arity = sizeof...(Args);
-		template <std::size_t I> using arg = std::tuple_element_t<I, std::tuple<Args...>>;
-		using args_tuple = std::tuple<Args...>;
+		using ReturnType = Ret;
+		static constexpr std::size_t Arity = sizeof...(Args);
+		template <std::size_t I> using Arg = std::tuple_element_t<I, std::tuple<Args...>>;
+		using ArgsTuple = std::tuple<Args...>;
 	};
 
 	// Pointer-to-member-function of operator(), const and non-const, used to
 	// peel apart lambdas (which are just anonymous functors under the hood).
 	template <typename C, typename Ret, typename... Args>
-	struct function_traits<Ret (C::*)(Args...) const>
+	struct FunctionTraits<Ret (C::*)(Args...) const>
 	{
-		using return_type = Ret;
-		static constexpr std::size_t arity = sizeof...(Args);
-		template <std::size_t I> using arg = std::tuple_element_t<I, std::tuple<Args...>>;
-		using args_tuple = std::tuple<Args...>;
+		using ReturnType = Ret;
+		static constexpr std::size_t Arity = sizeof...(Args);
+		template <std::size_t I> using Arg = std::tuple_element_t<I, std::tuple<Args...>>;
+		using ArgsTuple = std::tuple<Args...>;
 	};
 
-	template <typename C, typename Ret, typename... Args>
-	struct function_traits<Ret (C::*)(Args...)>
+	template <typename C, typename Ret, typename... Args> struct FunctionTraits<Ret (C::*)(Args...)>
 	{
-		using return_type = Ret;
-		static constexpr std::size_t arity = sizeof...(Args);
-		template <std::size_t I> using arg = std::tuple_element_t<I, std::tuple<Args...>>;
-		using args_tuple = std::tuple<Args...>;
+		using ReturnType = Ret;
+		static constexpr std::size_t Arity = sizeof...(Args);
+		template <std::size_t I> using Arg = std::tuple_element_t<I, std::tuple<Args...>>;
+		using ArgsTuple = std::tuple<Args...>;
 	};
 
 	// Fallback: any other callable (lambda, functor) -- peel off operator().
-	template <typename F> struct function_traits : function_traits<decltype(&F::operator())>
+	template <typename F> struct FunctionTraits : FunctionTraits<decltype(&F::operator())>
 	{
 	};
 }

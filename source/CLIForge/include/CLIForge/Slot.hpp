@@ -58,7 +58,7 @@ namespace cliforge
 		// this is false for every slot before binding.
 		bool awaitingChoices = false;
 
-		std::string longFlag() const;
-		std::string shortFlag() const;
+		[[nodiscard]] std::string longFlag() const;
+		[[nodiscard]] std::string shortFlag() const;
 	};
 }

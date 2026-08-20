@@ -9,9 +9,10 @@
 // rarer enum/choice-restricted case pays for a one-time, shared, heap
 // allocation to hold its name table.
 
+#include <cstdint>
+
 #include <algorithm>
 #include <charconv>
-#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -47,10 +48,10 @@ namespace cliforge
 	{
 	public:
 		explicit CliError(const std::string& msg, ErrorKind kind = ErrorKind::Generic);
-		ErrorKind kind() const noexcept;	
+		[[nodiscard]] ErrorKind kind() const noexcept;
 
 	private:
-		ErrorKind kind_;
+		ErrorKind m_kind;
 	};
 
 	// A token couldn't be converted to the type a slot expects -- always
@@ -58,7 +59,7 @@ namespace cliforge
 	class ParseError : public CliError
 	{
 	public:
-		explicit ParseError(const std::string& msg); 
+		explicit ParseError(const std::string& msg);
 	};
 
 	// Something is wrong with how a command was *built* (mismatched arity
@@ -69,7 +70,7 @@ namespace cliforge
 	// them at compile time via static_assert), not at end-user parse time.
 	struct RegistrationError : CliError
 	{
-		explicit RegistrationError(const std::string& msg); 
+		explicit RegistrationError(const std::string& msg);
 	};
 
 	// ---------------------------------------------------------------------
@@ -121,7 +122,7 @@ namespace cliforge
 	{
 		std::vector<std::pair<std::string, Scalar>> entries;
 
-		Scalar parse(std::string_view token, std::string_view label) const;	
+		[[nodiscard]] Scalar parse(std::string_view token, std::string_view label) const;
 	};
 
 	struct TypeInfo
@@ -134,9 +135,8 @@ namespace cliforge
 		// Populated only for choices<T>()-restricted slots.
 		std::shared_ptr<const ChoiceTable> choiceTable;
 
-		bool valid() const;
-		Scalar parse(std::string_view token, std::string_view label) const;
-		
+		[[nodiscard]] bool valid() const;
+		[[nodiscard]] Scalar parse(std::string_view token, std::string_view label) const;
 	};
 
 	namespace detail
@@ -326,12 +326,12 @@ namespace cliforge
 
 		static Value ofScalar(Scalar s);
 		static Value ofVector(std::vector<Scalar> v);
-		bool hasValue() const;
-		bool isVector() const;
+		[[nodiscard]] bool hasValue() const;
+		[[nodiscard]] bool isVector() const;
 
-		template <typename T> T as() const
+		template <typename T> [[nodiscard]] T as() const
 		{
-			const Scalar& s = std::get<Scalar>(data_);
+			const Scalar& s = std::get<Scalar>(m_data);
 			if constexpr (std::is_enum_v<T>)
 			{
 				return static_cast<T>(std::get<EnumTag>(s).value);
@@ -344,7 +344,7 @@ namespace cliforge
 
 		template <typename T> std::vector<T> asVector() const
 		{
-			const auto& vec = std::get<std::vector<Scalar>>(data_);
+			const auto& vec = std::get<std::vector<Scalar>>(m_data);
 			std::vector<T> out;
 			out.reserve(vec.size());
 			for (const Scalar& s : vec)
@@ -362,6 +362,6 @@ namespace cliforge
 		}
 
 	private:
-		std::variant<std::monostate, Scalar, std::vector<Scalar>> data_;
+		std::variant<std::monostate, Scalar, std::vector<Scalar>> m_data;
 	};
 }

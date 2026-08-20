@@ -26,8 +26,7 @@ namespace cliforge::detail
 	// ordered by distance. Anything farther than a generous relative
 	// threshold is dropped so we never suggest something wildly unrelated.
 	std::vector<std::string> closestMatches(const std::string& query,
-												   const std::vector<std::string>& pool,
-												   std::size_t limit)
+											const std::vector<std::string>& pool, std::size_t limit)
 	{
 		std::vector<std::pair<std::size_t, std::string>> scored;
 		scored.reserve(pool.size());

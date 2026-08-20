@@ -20,11 +20,12 @@
 namespace cliforge
 {
 
-	class Engine                   {
+	class Engine
+	{
 	public:
 		explicit Engine(std::string programName = "");
 
-		Engine& describe(std::string description);
+		Engine& describe(const std::string& description);
 
 		// Registers a new, empty command and returns a reference to it so it
 		// can be built up with the fluent .keyword()/.parameter()/... API.
@@ -34,9 +35,9 @@ namespace cliforge
 		int run(int argc, char** argv);
 
 	private:
-		std::string programName_;
-		std::string description_;
-		std::vector<std::unique_ptr<Command>> commands_;
+		std::string m_programName;
+		std::string m_description;
+		std::vector<std::unique_ptr<Command>> m_commands;
 
 		static std::string basename(const std::string& path);
 		static std::string join(const std::vector<std::string>& tokens);
@@ -45,7 +46,7 @@ namespace cliforge
 		// shows its help -- one command's help if there's exactly one match,
 		// all of them (clearly separated) if the prefix is genuinely
 		// ambiguous, or the global command list plus a hint if there's none.
-		int showHelp(const std::vector<std::string>& queryTokens) const;
+		[[nodiscard]] int showHelp(const std::vector<std::string>& queryTokens) const;
 
 		void printGlobalHelp(std::ostream& os) const;
 		void suggestCommands(const std::vector<std::string>& tokens, std::ostream& os) const;

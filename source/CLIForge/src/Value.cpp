@@ -4,16 +4,20 @@
 namespace cliforge
 {
 	CliError::CliError(const std::string& msg, ErrorKind kind)
-		: std::runtime_error(msg), kind_(kind) {}
+		: std::runtime_error(msg), m_kind(kind)
+	{
+	}
 
 	ErrorKind CliError::kind() const noexcept
 	{
-		return kind_;
+		return kind();
 	}
 
 	ParseError::ParseError(const std::string& msg) : CliError(msg, ErrorKind::TypeMismatch) {}
 
-	RegistrationError::RegistrationError(const std::string& msg) : CliError(msg, ErrorKind::Generic) {}
+	RegistrationError::RegistrationError(const std::string& msg) : CliError(msg, ErrorKind::Generic)
+	{
+	}
 
 	Scalar ChoiceTable::parse(std::string_view token, std::string_view label) const
 	{
@@ -59,22 +63,22 @@ namespace cliforge
 	Value Value::ofScalar(Scalar s)
 	{
 		Value v;
-		v.data_ = std::move(s);
+		v.m_data = std::move(s);
 		return v;
 	}
 	Value Value::ofVector(std::vector<Scalar> v)
 	{
 		Value out;
-		out.data_ = std::move(v);
+		out.m_data = std::move(v);
 		return out;
 	}
 
 	bool Value::hasValue() const
 	{
-		return !std::holds_alternative<std::monostate>(data_);
+		return !std::holds_alternative<std::monostate>(m_data);
 	}
 	bool Value::isVector() const
 	{
-		return std::holds_alternative<std::vector<Scalar>>(data_);
+		return std::holds_alternative<std::vector<Scalar>>(m_data);
 	}
 }
