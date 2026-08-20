@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+#
+# .githooks/pre-commit
+#
+# Runs clang-format and clang-tidy against staged C/C++ files before each
+# commit — no Python, no pre-commit framework, just bash and (optionally)
+# the clang tools themselves.
+#
+# Neither tool is required to have this hook installed: if a binary isn't
+# on PATH, this prints a warning and skips that check instead of blocking
+# the commit. Only *actual formatting/lint issues* from a tool that IS
+# installed will block a commit (unless --fix resolves them, see below).
+#
+# Platforms:
+#   - Linux / macOS: runs under the system bash (or Homebrew bash on macOS)
+#     with no extra setup.
+#   - Windows: runs automatically through Git for Windows' bundled Git Bash —
+#     git.exe recognizes the "#!/usr/bin/env bash" line above and executes
+#     hooks through it directly, so no WSL, Cygwin, or separate bash install
+#     is needed. Everything this script uses (mktemp, diff, grep, printf,
+#     command -v) ships with Git for Windows out of the box.
+#
+# One-time setup per clone (same command on every OS):
+#   chmod +x .githooks/pre-commit   (no-op on Windows, harmless either way)
+#   git config core.hooksPath .githooks
+#
+# Usage:
+#   .githooks/pre-commit                # hook mode: checks staged files, blocks on issues
+#   .githooks/pre-commit --all          # checks every tracked C/C++ file, ignoring staging
+#   .githooks/pre-commit --fix          # applies fixes to staged files, then re-stages them
+#   .githooks/pre-commit --all --fix    # applies fixes across the whole tree (flags combine)
+#
+# What --fix actually does:
+#   clang-format -i         always safe — pure whitespace/layout, never changes behavior.
+#   clang-tidy --fix        NOT always safe — some checks (e.g. identifier renames) can
+#                            occasionally produce code that doesn't compile if the fix is
+#                            context-sensitive. Review the diff after running --fix before
+#                            you trust it blindly, especially the first few times.
+#
+# In staged (non --all) mode, --fix re-stages (git add) any file it modifies, so the
+# fixed version — not the original — is what actually gets committed. In --all mode
+# nothing is staged automatically; you review and commit the changes yourself.
+set -uo pipefail
+
+# Colors only when writing to an interactive terminal — avoids raw escape
+# codes in CI logs, redirected output, or terminals that don't support ANSI.
+if [ -t 1 ]; then
+    RED=$'\033[0;31m'
+    YELLOW=$'\033[0;33m'
+    GREEN=$'\033[0;32m'
+    RESET=$'\033[0m'
+else
+    RED=''
+    YELLOW=''
+    GREEN=''
+    RESET=''
+fi
+
+exit_code=0
+
+# --- Flag parsing (order-independent) ---
+# --all: check every tracked file matching the patterns, ignoring staging
+#        state entirely (git ls-files, not git diff --cached).
+# --fix: apply fixes in place instead of just reporting them.
+all_mode=0
+fix_mode=0
+for arg in "$@"; do
+    case "$arg" in
+        --all) all_mode=1 ;;
+        --fix) fix_mode=1 ;;
+        *)
+            echo "${RED}unknown argument: $arg${RESET}"
+            echo "usage: $0 [--all] [--fix]"
+            exit 2
+            ;;
+    esac
+done
+
+# --- Collect C/C++ files (added/copied/modified, or all tracked in --all mode) ---
+# ':!vendor/*' excludes third-party code vendored under vendor/ (see
+# cmake/Dependencies.cmake in the parent project) -- it isn't this
+# project's code, so it isn't held to this style guide. Not part of the
+# toolkit as shipped; added for this project's vendor/ convention.
+files=()
+if [ "$all_mode" -eq 1 ]; then
+    echo "mode: --all (checking every tracked C/C++ file via 'git ls-files')"
+    while IFS= read -r line; do
+        [ -n "$line" ] && files+=("$line")
+    done < <(git ls-files -- \
+        '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cxx' '*.tpp' ':!vendor/*')
+else
+    echo "mode: staged (checking files via 'git diff --cached')"
+    while IFS= read -r line; do
+        [ -n "$line" ] && files+=("$line")
+    done < <(git diff --cached --name-only --diff-filter=ACM -- \
+        '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cxx' '*.tpp' ':!vendor/*')
+fi
+
+if [ "$fix_mode" -eq 1 ]; then
+    echo "fix: enabled (issues will be corrected in place, not just reported)"
+fi
+
+if [ ${#files[@]} -eq 0 ]; then
+    echo "${YELLOW}no matching C/C++ files found — nothing to check.${RESET}"
+    exit 0
+fi
+
+echo "found ${#files[@]} file(s) to check:"
+printf '  %s\n' "${files[@]}"
+
+# --- clang-format: check (or fix) formatting ---
+if command -v clang-format >/dev/null 2>&1; then
+    if [ "$fix_mode" -eq 1 ]; then
+        echo "running clang-format --fix (in-place, $(command -v clang-format))..."
+        fixed=()
+        for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! diff -q <(clang-format "$f") "$f" >/dev/null 2>&1; then
+                clang-format -i "$f"
+                fixed+=("$f")
+            fi
+        done
+        if [ ${#fixed[@]} -gt 0 ]; then
+            echo "${GREEN}clang-format: reformatted ${#fixed[@]} file(s):${RESET}"
+            printf '  %s\n' "${fixed[@]}"
+            if [ "$all_mode" -eq 0 ]; then
+                git add -- "${fixed[@]}"
+                echo "re-staged the fixed file(s) so they're included in this commit."
+            fi
+        fi
+    else
+        echo "running clang-format check ($(command -v clang-format))..."
+        unformatted=()
+        for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! diff -q <(clang-format "$f") "$f" >/dev/null 2>&1; then
+                unformatted+=("$f")
+            fi
+        done
+        if [ ${#unformatted[@]} -gt 0 ]; then
+            echo "${RED}clang-format: these files aren't formatted:${RESET}"
+            printf '  %s\n' "${unformatted[@]}"
+            echo "Fix with: clang-format -i ${unformatted[*]}"
+            echo "(or rerun this hook with --fix to apply automatically)"
+            exit_code=1
+        fi
+    fi
+else
+    echo "${YELLOW}warning: clang-format not found on PATH — skipping format check.${RESET}"
+fi
+
+# --- clang-tidy: static analysis (or fix), needs a compile database ---
+if command -v clang-tidy >/dev/null 2>&1; then
+    if [ ! -f compile_commands.json ]; then
+        echo "${YELLOW}warning: compile_commands.json not found — skipping clang-tidy.${RESET}"
+        echo "${YELLOW}Generate one with: cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ...${RESET}"
+    else
+        tidy_output=$(mktemp)
+        tidy_had_issues=0
+        if [ "$fix_mode" -eq 1 ]; then
+            echo "running clang-tidy --fix (in-place, $(command -v clang-tidy))..."
+            echo "${YELLOW}note: some clang-tidy fixes are context-sensitive and can occasionally${RESET}"
+            echo "${YELLOW}produce code that doesn't compile — review the diff before trusting it.${RESET}"
+            for f in "${files[@]}"; do
+                [ -f "$f" ] || continue
+                if ! clang-tidy --quiet --fix --fix-errors -p . "$f" >>"$tidy_output" 2>&1; then
+                    tidy_had_issues=1
+                fi
+            done
+            if [ "$all_mode" -eq 0 ]; then
+                changed=()
+                while IFS= read -r line; do
+                    [ -n "$line" ] && changed+=("$line")
+                done < <(git diff --name-only -- "${files[@]}")
+                if [ ${#changed[@]} -gt 0 ]; then
+                    git add -- "${changed[@]}"
+                    echo "${GREEN}clang-tidy: modified and re-staged ${#changed[@]} file(s):${RESET}"
+                    printf '  %s\n' "${changed[@]}"
+                fi
+            fi
+        else
+            echo "running clang-tidy check ($(command -v clang-tidy))..."
+            for f in "${files[@]}"; do
+                [ -f "$f" ] || continue
+                if ! clang-tidy --quiet "$f" >>"$tidy_output" 2>&1; then
+                    tidy_had_issues=1
+                fi
+            done
+        fi
+
+        if grep -q "warning:\|error:" "$tidy_output" 2>/dev/null; then
+            if [ "$fix_mode" -eq 1 ]; then
+                echo "${YELLOW}clang-tidy: issues remaining after fix attempt (not all checks can auto-fix):${RESET}"
+            else
+                echo "${RED}clang-tidy found issues:${RESET}"
+                echo "(rerun this hook with --fix to auto-correct what clang-tidy can fix)"
+            fi
+            cat "$tidy_output"
+            exit_code=1
+        elif [ "$tidy_had_issues" -eq 1 ]; then
+            # Non-zero exit with no warning/error text usually means clang-tidy
+            # itself couldn't run (e.g. missing headers) — surface it, but
+            # don't block the commit on a tooling problem rather than a style one.
+            echo "${YELLOW}warning: clang-tidy exited with an error unrelated to style:${RESET}"
+            cat "$tidy_output"
+        fi
+        rm -f "$tidy_output"
+    fi
+else
+    echo "${YELLOW}warning: clang-tidy not found on PATH — skipping static analysis.${RESET}"
+fi
+
+if [ $exit_code -eq 0 ]; then
+    echo "${GREEN}pre-commit checks passed.${RESET}"
+fi
+
+exit $exit_code

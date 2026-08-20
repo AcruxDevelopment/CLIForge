@@ -20,8 +20,7 @@
 namespace cliforge
 {
 
-	class Engine
-	{
+	class Engine                   {
 	public:
 		explicit Engine(std::string programName = "");
 
