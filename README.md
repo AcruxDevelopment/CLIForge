@@ -31,22 +31,6 @@ $ greeter greet Ada --loud
 HELLO, Ada!!
 ```
 
-## Try it
-
-```sh
-g++ -std=c++20 -Iinclude -O2 -o packctl examples/main.cpp
-./packctl                                        # global help
-./packctl project myapp create --template cpp --git
-./packctl build 42 2 1 -a arm64 x64 -e vim       # variadic params + variadic option
-./packctl build 7 -ndi -e nano                   # combined short flags
-./packctl deploy web1 --env prod web2 -n web3    # loose parameters, order-agnostic
-./packctl project new -h                         # ambiguous prefix -> shows all 3 matches
-./packctl projct myapp delete                    # typo -> "did you mean"
-```
-
-Or with CMake: `cmake -B build && cmake --build build`, which produces
-`packctl` (the demo) plus `type_test` / `registration_errors_test`.
-
 ## The model
 
 A command has exactly two parts, matching the spec:
@@ -257,16 +241,11 @@ what this implementation does and why.
 ## Layout
 
 ```
-include/cliforge/
-  value.hpp            Scalar/Value/TypeInfo/ErrorKind -- the type & error system
-  slot.hpp              Keyword/Parameter/Flag/Option descriptor
-  function_traits.hpp   Return/argument-type deduction for action()
-  levenshtein.hpp        Edit distance + prefix-aware closest-match helper
-  command.hpp            Builder, matcher, unstructured parser, help text
-  engine.hpp              Registration, ranking/dispatch, help resolution
-  cliforge.hpp            Aggregator -- the only header you include
-examples/main.cpp         "packctl", a demo touching every feature
-tests/
-  type_test.cpp                    every scalar type, valid + invalid input
-  registration_errors_test.cpp     every builder-misuse guard (+ positive cases)
+  Value.hpp              Scalar/Value/TypeInfo/ErrorKind -- the type & error system
+  Slot.hpp               Keyword/Parameter/Flag/Option descriptor
+  FunctionTraits.hpp     Return/argument-type deduction for action()
+  Levenshtein.hpp        Edit distance + prefix-aware closest-match helper
+  Command.hpp            Builder, matcher, unstructured parser, help text
+  Engine.hpp             Registration, ranking/dispatch, help resolution
+  CLIForge.hpp           Aggregator -- the only header you include
 ```
