@@ -1,0 +1,151 @@
+---
+# .clang-tidy
+# Enforces naming conventions (style guide §1) and a subset of the Language
+# Feature Do's and Don'ts (style guide §10) for C++ code. Place at the repo
+# root for Part I (C++) files. For Part II (C API) files, use the
+# directory-scoped override in c-api/.clang-tidy instead — clang-tidy picks
+# the closest .clang-tidy file up the directory tree, so nesting one there
+# gives that subtree different naming rules without affecting the rest of
+# the project. See TOOLING.md for what this file can't check.
+Checks: >
+  -*,
+  readability-identifier-naming,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-loop-convert,
+  modernize-concat-nested-namespaces,
+  modernize-use-default-member-init,
+  modernize-avoid-c-arrays,
+  modernize-use-nodiscard,
+  cppcoreguidelines-special-member-functions,
+  cppcoreguidelines-owning-memory,
+  cppcoreguidelines-no-malloc,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-pro-type-cstyle-cast,
+  cppcoreguidelines-macro-usage,
+  performance-unnecessary-value-param,
+  performance-unnecessary-copy-initialization,
+  bugprone-exception-escape,
+  bugprone-use-after-move
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*\.hpp$'
+FormatStyle: file
+
+CheckOptions:
+  # --- Naming Conventions — style guide §1 ---
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.MethodCase
+    value: camelBack
+
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack
+  - key: readability-identifier-naming.LocalVariableCase
+    value: camelBack
+  - key: readability-identifier-naming.ParameterCase
+    value: camelBack
+
+  # A plain local `const` (not `static`, not `constexpr`) stays under the
+  # Local Variables rule (camelCase) per the style guide's own note that
+  # only *global/static* const/constexpr values are "constants" for this
+  # rule's purposes -- without this, it silently inherits the general
+  # ConstantCase (PascalCase) fallback below instead, which would flag
+  # totally ordinary code like `const std::string name = ...;` inside a
+  # function. StaticConstantCase/GlobalConstantCase/ConstexprVariableCase
+  # below are unaffected and still require PascalCase, matching the guide.
+  - key: readability-identifier-naming.LocalConstantCase
+    value: camelBack
+
+  # Private/protected member variables: camelCase with an m_ prefix.
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: m_
+  # Public members (e.g. plain data structs) — camelCase, no prefix.
+  - key: readability-identifier-naming.PublicMemberCase
+    value: camelBack
+
+  # Static class data members — camelCase with an s_ prefix (distinct from
+  # instance members above). "ClassMember" is clang-tidy's category for
+  # static (non-const) data members specifically.
+  - key: readability-identifier-naming.ClassMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.ClassMemberPrefix
+    value: s_
+
+  # Global (namespace/file-scope, mutable) variables — camelCase with a g_
+  # prefix, to flag genuinely global mutable state at every use site.
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: camelBack
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+
+  # Static variables — function-local `static` or file-scope `static` —
+  # camelCase with an s_ prefix, for the same reason as globals above.
+  - key: readability-identifier-naming.StaticVariableCase
+    value: camelBack
+  - key: readability-identifier-naming.StaticVariablePrefix
+    value: s_
+
+  # Constants and enum values — PascalCase (style guide §1 table).
+  - key: readability-identifier-naming.ConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.StaticConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.ClassConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: CamelCase
+
+  # Template parameters — PascalCase (e.g. ValueType).
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeTemplateParameterCase
+    value: CamelCase
+
+  # Type aliases / typedefs — PascalCase, matching class naming.
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+
+  # Macros — ALL_CAPS_SNAKE_CASE (the one deliberate exception in §1).
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  # --- cppcoreguidelines-owning-memory — style guide §10, Memory and Ownership ---
+  # Flags raw new/delete and legacy C allocators used for ownership instead of
+  # std::unique_ptr / std::shared_ptr.
+  - key: cppcoreguidelines-owning-memory.LegacyResourceProducers
+    value: 'malloc;calloc;realloc;strdup;strndup'
+  - key: cppcoreguidelines-owning-memory.LegacyResourceConsumers
+    value: 'free;realloc'
+
+  # --- cppcoreguidelines-macro-usage — style guide §10, prefer constexpr over #define ---
+  # Allow include-guard-style and project-prefixed macros; flag everything else
+  # that could instead be a constexpr constant.
+  - key: cppcoreguidelines-macro-usage.AllowedRegexp
+    value: '^[A-Z0-9_]+_H(PP)?$'
+  - key: cppcoreguidelines-macro-usage.CheckCapsOnly
+    value: false

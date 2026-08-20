@@ -1,0 +1,89 @@
+---
+# .clang-format
+# Enforces the formatting rules from the C/C++ Coding Style Guide (Part I: C++ Style).
+# Applies equally to Part II C API files per §15 (Indentation and Braces) — same
+# tabs/Allman/line-length rules, just different naming (naming can't be enforced
+# by clang-format; see .clang-tidy and TOOLING.md).
+Language: Cpp
+Standard: Latest
+
+# --- Indentation (style guide §2) ---
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+IndentPPDirectives: None
+IndentExternBlock: Indent
+
+# Access specifiers (public:/private:) sit unindented, flush with the class
+# keyword — only members are indented one level, matching every example in §1/§6.
+AccessModifierOffset: -4
+
+# Namespace bodies are indented like any other block (style guide §Namespaces).
+NamespaceIndentation: All
+
+# --- Braces: Allman style everywhere (style guide §3) ---
+BreakBeforeBraces: Allman
+Cpp11BracedListStyle: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortEnumsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# No trailing "// namespace X" / "// class X" comments on closing braces
+# (style guide §Namespaces / §6).
+FixNamespaceComments: false
+
+# --- Pointers and references attach to the type (style guide §4) ---
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+
+# --- Line length (style guide §8) ---
+ColumnLimit: 100
+
+# --- Spacing (style guide §5) ---
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpacesInAngles: false
+
+# --- Include ordering (style guide §7: main header, C headers, C++ std,
+# third-party, project headers) ---
+SortIncludes: true
+SortUsingDeclarations: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '(Test)?$'
+IncludeCategories:
+  # 1. Corresponding header is auto-detected and always sorted first.
+  # 2. C system headers wrapped for C++ (<cstdio>, <cstdint>, ...).
+  - Regex: '^<(cassert|cctype|cerrno|cfenv|cfloat|cinttypes|climits|clocale|cmath|csetjmp|csignal|cstdarg|cstddef|cstdint|cstdio|cstdlib|cstring|ctime|cuchar|cwchar|cwctype)>$'
+    Priority: 1
+    CaseSensitive: true
+  # 3. C++ standard library headers (no dot, no slash — <vector>, <memory>, ...).
+  - Regex: '^<[a-z_]+>$'
+    Priority: 2
+    CaseSensitive: true
+  # 4. Third-party / external library headers (<fmt/format.h>, <boost/...>, ...).
+  - Regex: '^<.*>$'
+    Priority: 3
+    CaseSensitive: true
+  # 5. Project headers, quoted ("NetworkManager.hpp", ...).
+  - Regex: '^".*"$'
+    Priority: 4
+    CaseSensitive: true
+
+# --- Misc ---
+AlignTrailingComments: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+BinPackArguments: true
+BinPackParameters: true
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+PenaltyReturnTypeOnItsOwnLine: 1000

@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# .githooks/pre-commit
+#
+# Runs clang-format and clang-tidy against staged C/C++ files before each
+# commit — no Python, no pre-commit framework, just bash and (optionally)
+# the clang tools themselves.
+#
+# Neither tool is required to have this hook installed: if a binary isn't
+# on PATH, this prints a warning and skips that check instead of blocking
+# the commit. Only *actual formatting/lint issues* from a tool that IS
+# installed will block a commit.
+#
+# Platforms:
+#   - Linux / macOS: runs under the system bash (or Homebrew bash on macOS)
+#     with no extra setup.
+#   - Windows: runs automatically through Git for Windows' bundled Git Bash —
+#     git.exe recognizes the "#!/usr/bin/env bash" line above and executes
+#     hooks through it directly, so no WSL, Cygwin, or separate bash install
+#     is needed. Everything this script uses (mktemp, diff, grep, printf,
+#     command -v) ships with Git for Windows out of the box.
+#
+# One-time setup per clone (same command on every OS):
+#   chmod +x .githooks/pre-commit   (no-op on Windows, harmless either way)
+#   git config core.hooksPath .githooks
+
+set -uo pipefail
+
+# Colors only when writing to an interactive terminal — avoids raw escape
+# codes in CI logs, redirected output, or terminals that don't support ANSI.
+if [ -t 1 ]; then
+    RED=$'\033[0;31m'
+    YELLOW=$'\033[0;33m'
+    GREEN=$'\033[0;32m'
+    RESET=$'\033[0m'
+else
+    RED=''
+    YELLOW=''
+    GREEN=''
+    RESET=''
+fi
+
+exit_code=0
+
+# --- Collect staged C/C++ files (added/copied/modified) ---
+# ':!vendor/*' excludes third-party code vendored under vendor/ (see
+# cmake/Dependencies.cmake in the parent project) -- it isn't this
+# project's code, so it isn't held to this style guide. Not part of the
+# toolkit as shipped; added for this project's vendor/ convention.
+files=()
+while IFS= read -r line; do
+    [ -n "$line" ] && files+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACM -- \
+    '*.c' '*.h' '*.cpp' '*.hpp' '*.cc' '*.cxx' '*.tpp' ':!vendor/*')
+
+if [ ${#files[@]} -eq 0 ]; then
+    exit 0
+fi
+
+# --- clang-format: check staged files are already formatted ---
+if command -v clang-format >/dev/null 2>&1; then
+    unformatted=()
+    for f in "${files[@]}"; do
+        [ -f "$f" ] || continue
+        if ! diff -q <(clang-format "$f") "$f" >/dev/null 2>&1; then
+            unformatted+=("$f")
+        fi
+    done
+
+    if [ ${#unformatted[@]} -gt 0 ]; then
+        echo "${RED}clang-format: these files aren't formatted:${RESET}"
+        printf '  %s\n' "${unformatted[@]}"
+        echo "Fix with: clang-format -i ${unformatted[*]}"
+        exit_code=1
+    fi
+else
+    echo "${YELLOW}warning: clang-format not found on PATH — skipping format check.${RESET}"
+fi
+
+# --- clang-tidy: static analysis, needs a compile database ---
+if command -v clang-tidy >/dev/null 2>&1; then
+    if [ ! -f compile_commands.json ]; then
+        echo "${YELLOW}warning: compile_commands.json not found — skipping clang-tidy.${RESET}"
+        echo "${YELLOW}Generate one with: cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ...${RESET}"
+    else
+        tidy_output=$(mktemp)
+        tidy_had_issues=0
+
+        for f in "${files[@]}"; do
+            [ -f "$f" ] || continue
+            if ! clang-tidy --quiet "$f" >>"$tidy_output" 2>&1; then
+                tidy_had_issues=1
+            fi
+        done
+
+        if grep -q "warning:\|error:" "$tidy_output" 2>/dev/null; then
+            echo "${RED}clang-tidy found issues:${RESET}"
+            cat "$tidy_output"
+            exit_code=1
+        elif [ "$tidy_had_issues" -eq 1 ]; then
+            # Non-zero exit with no warning/error text usually means clang-tidy
+            # itself couldn't run (e.g. missing headers) — surface it, but
+            # don't block the commit on a tooling problem rather than a style one.
+            echo "${YELLOW}warning: clang-tidy exited with an error unrelated to style:${RESET}"
+            cat "$tidy_output"
+        fi
+
+        rm -f "$tidy_output"
+    fi
+else
+    echo "${YELLOW}warning: clang-tidy not found on PATH — skipping static analysis.${RESET}"
+fi
+
+if [ $exit_code -eq 0 ]; then
+    echo "${GREEN}pre-commit checks passed.${RESET}"
+fi
+
+exit $exit_code

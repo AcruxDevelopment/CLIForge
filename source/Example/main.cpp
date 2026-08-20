@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include <cliforge/cliforge.hpp>
+#include <CLIForge/CLIForge.hpp>
 
 using cliforge::Engine;
 

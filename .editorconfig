@@ -1,0 +1,29 @@
+# .editorconfig
+# Baseline whitespace/indentation rules for editors that don't run
+# clang-format live (or before it runs). See .clang-format for the
+# authoritative, full formatting rules from the style guide.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Style guide §2 / §15 — tabs everywhere, C++ and C API alike.
+[*.{c,h,cpp,hpp,cc,cxx,tpp}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+max_line_length = 100
+
+# Config/build files typically use spaces by convention — not covered by the
+# C/C++ style guide, kept here only so this file has a sane fallback for
+# CMakeLists.txt, YAML, etc. in the same repo.
+[*.{yml,yaml,cmake,json}]
+indent_style = space
+indent_size = 2
+
+[CMakeLists.txt]
+indent_style = space
+indent_size = 2

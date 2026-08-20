@@ -1,0 +1,57 @@
+---
+# c-api/.clang-tidy
+# Place this file at the root of whatever directory holds your Part II
+# (C API) surface — e.g. c-api/, public-include/, or wherever your extern "C"
+# headers and shims live. clang-tidy always uses the closest .clang-tidy file
+# up the directory tree, so files under this directory pick up these
+# snake_case naming rules instead of the PascalCase/camelCase rules in the
+# repo-root .clang-tidy, without any extra flags or per-file configuration.
+#
+# Formatting (tabs, Allman braces, line length) still comes from the single
+# root-level .clang-format — only naming differs between Part I and Part II,
+# per style guide §15 (Indentation and Braces).
+InheritParentConfig: true
+
+Checks: >
+  readability-identifier-naming,
+  bugprone-exception-escape
+
+CheckOptions:
+  # --- C API naming — style guide §13 ---
+  # Every public symbol uses snake_case with a library/module prefix
+  # (e.g. net_manager_connect, NET_MAX_RETRIES). clang-tidy can enforce the
+  # casing; the prefix itself is a code-review convention (see TOOLING.md).
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.LocalVariableCase
+    value: lower_case
+
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  # Enum values — ALL_CAPS_SNAKE_CASE with a library + enum prefix
+  # (e.g. NET_STATE_CONNECTED).
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  # Internal (non-exported) global/static variables — style guide §13's
+  # g_/s_ rows. Only applies to mutable state; GlobalConstantCase above
+  # still governs const globals, which stay UPPER_CASE with no prefix.
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+  - key: readability-identifier-naming.StaticVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.StaticVariablePrefix
+    value: s_

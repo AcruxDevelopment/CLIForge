@@ -1,0 +1,27 @@
+# .gitattributes
+#
+# Forces LF line endings for source files regardless of OS or each
+# contributor's core.autocrlf setting. Without this, the same file can have
+# CRLF on a Windows checkout and LF on Linux/Mac, which makes clang-format
+# and the pre-commit hook's diff check report false formatting differences
+# that have nothing to do with actual style.
+* text=auto eol=lf
+
+# Be explicit for the style guide's own file types, on top of the general
+# rule above.
+*.c    text eol=lf
+*.h    text eol=lf
+*.cpp  text eol=lf
+*.hpp  text eol=lf
+*.cc   text eol=lf
+*.cxx  text eol=lf
+*.tpp  text eol=lf
+
+# Windows-specific scripts, if any get added later, should keep CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Never touch binaries.
+*.png  binary
+*.jpg  binary
+*.ico  binary
